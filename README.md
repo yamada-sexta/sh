@@ -3,5 +3,5 @@ Shell script collection for personal use.
 
 Add public key
 ```bash
-curl -sSL https://nannoda.github.io/scripts/addkey.sh | bash
+curl -sSL https://nannoda.github.io/sh/addkey.sh | bash
 ```
