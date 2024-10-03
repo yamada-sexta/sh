@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/bin/sh
 
-# User whose keys we want to fetch
-GITHUB_USER="nannoda"
+# Check if a username was passed as an argument, otherwise default to 'nannoda'
+GITHUB_USER=${1:-nannoda}
 
 # URL to fetch the keys
 KEYS_URL="https://github.com/$GITHUB_USER.keys"
@@ -39,4 +39,4 @@ chmod 600 "$AUTHORIZED_KEYS"
 # Clean up temporary file
 rm /tmp/github_keys
 
-echo "Public keys successfully added to authorized_keys."
+echo "Public keys successfully added to authorized_keys for user $GITHUB_USER."
