@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Check if a username was passed as an argument, otherwise default to 'nannoda'
-GITHUB_USER=${1:-nannoda}
+GITHUB_USER=${1:-yamada-sexta}
 
 # URL to fetch the keys
 KEYS_URL="https://github.com/$GITHUB_USER.keys"
