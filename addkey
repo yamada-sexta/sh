@@ -1,7 +1,10 @@
 #!/bin/sh
 
-# Check if a username was passed as an argument, otherwise default to 'nannoda'
-GITHUB_USER=${1:-"yamada-sexta"}
+# Prompt for GitHub username with a default
+DEFAULT_USER="yamada-sexta"
+echo -n "Enter GitHub username [${DEFAULT_USER}]: "
+read INPUT_USER
+GITHUB_USER="${INPUT_USER:-$DEFAULT_USER}"
 
 # URL to fetch the keys
 KEYS_URL="https://github.com/$GITHUB_USER.keys"
