@@ -1,22 +1,23 @@
 #!/bin/sh
-# disable-sleep.sh — disable system suspend/sleep across different init systems
-# Works with: systemd, OpenRC (Alpine), doas/sudo/root
+# disable-sleep.sh — portable suspend disabler
+# Works with systemd / OpenRC, doas / sudo, and pipe execution
+
 set -e
 
-# --- Elevate privileges if not root ---
-if [ "$(id -u)" -ne 0 ]; then
-    echo "⚙️  Root privileges required. Trying to elevate..."
-    if command -v doas >/dev/null 2>&1; then
-        exec doas "$0" "$@"
+# --- Helper to run commands as root safely ---
+run_as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v doas >/dev/null 2>&1; then
+        doas "$@"
     elif command -v sudo >/dev/null 2>&1; then
-        exec sudo "$0" "$@"
+        sudo "$@"
     else
-        echo "❌ Neither 'doas' nor 'sudo' found. Please run as root."
+        echo "❌ Need root privileges (install doas or sudo)"
         exit 1
     fi
-fi
+}
 
-# --- Detect init system ---
 echo "🔍 Detecting init system..."
 INIT_SYSTEM="unknown"
 
@@ -32,39 +33,38 @@ else
     esac
 fi
 
-# --- Disable sleep based on init system ---
 case "$INIT_SYSTEM" in
     systemd)
         echo "→ Detected systemd"
-        echo "Masking suspend/hibernate targets..."
-        systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
-        echo "✅ Systemd sleep/hibernate disabled."
+        run_as_root systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+        echo "✅ Systemd sleep disabled."
         ;;
     openrc)
-        echo "→ Detected OpenRC (e.g. Alpine Linux)"
-        if rc-service --exists acpid; then
+        echo "→ Detected OpenRC (e.g. Alpine)"
+        if rc-service --exists acpid >/dev/null 2>&1; then
             echo "Stopping and disabling acpid..."
-            rc-service acpid stop || true
-            rc-update del acpid || true
+            run_as_root rc-service acpid stop || true
+            run_as_root rc-update del acpid || true
         fi
 
         echo "Disabling CPU idle states..."
         for s in /sys/devices/system/cpu/cpuidle/state*/disable; do
-            [ -w "$s" ] && echo 1 > "$s"
+            if [ -w "$s" ]; then
+                run_as_root sh -c "echo 1 > $s"
+            fi
         done
 
-        echo "Persisting settings via /etc/local.d..."
-        mkdir -p /etc/local.d
-        cat >/etc/local.d/nosleep.start <<'EOF'
+        echo "Persisting via /etc/local.d..."
+        run_as_root sh -c 'mkdir -p /etc/local.d && cat >/etc/local.d/nosleep.start <<EOF
 #!/bin/sh
 for s in /sys/devices/system/cpu/cpuidle/state*/disable; do
-    [ -w "$s" ] && echo 1 > "$s"
+    [ -w "\$s" ] && echo 1 > "\$s"
 done
 EOF
-        chmod +x /etc/local.d/nosleep.start
-        rc-update add local default
-
-        echo "✅ OpenRC sleep/ACPI disabled."
+chmod +x /etc/local.d/nosleep.start
+rc-update add local default >/dev/null 2>&1 || true
+'
+        echo "✅ OpenRC sleep disabled."
         ;;
     *)
         echo "⚠️ Unknown init system. Please disable suspend manually."
@@ -72,4 +72,4 @@ EOF
         ;;
 esac
 
-echo "🎉 Done — sleep and suspend disabled."
+echo "🎉 Done — suspend disabled."
