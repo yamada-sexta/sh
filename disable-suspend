@@ -1,48 +1,59 @@
 #!/bin/sh
 # disable-sleep.sh — disable system suspend/sleep across different init systems
-
+# Works with: systemd, OpenRC (Alpine), doas/sudo/root
 set -e
 
-echo "Detecting init system..."
+# --- Elevate privileges if not root ---
+if [ "$(id -u)" -ne 0 ]; then
+    echo "⚙️  Root privileges required. Trying to elevate..."
+    if command -v doas >/dev/null 2>&1; then
+        exec doas "$0" "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        exec sudo "$0" "$@"
+    else
+        echo "❌ Neither 'doas' nor 'sudo' found. Please run as root."
+        exit 1
+    fi
+fi
 
+# --- Detect init system ---
+echo "🔍 Detecting init system..."
 INIT_SYSTEM="unknown"
 
-if command -v systemctl >/dev/null 2>&1; then
-    if pidof systemd >/dev/null 2>&1; then
-        INIT_SYSTEM="systemd"
-    fi
+if command -v systemctl >/dev/null 2>&1 && pidof systemd >/dev/null 2>&1; then
+    INIT_SYSTEM="systemd"
 elif command -v rc-service >/dev/null 2>&1; then
     INIT_SYSTEM="openrc"
-elif [ -f /sbin/init ]; then
-    # Fallback: check /proc/1/exe
-    INIT_EXE=$(readlink -f /proc/1/exe)
+else
+    INIT_EXE=$(readlink -f /proc/1/exe 2>/dev/null || true)
     case "$INIT_EXE" in
-        *openrc*) INIT_SYSTEM="openrc" ;;
         *systemd*) INIT_SYSTEM="systemd" ;;
+        *openrc*) INIT_SYSTEM="openrc" ;;
     esac
 fi
 
+# --- Disable sleep based on init system ---
 case "$INIT_SYSTEM" in
     systemd)
         echo "→ Detected systemd"
-        echo "Disabling suspend/hibernate targets..."
+        echo "Masking suspend/hibernate targets..."
         systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
-        echo "✅ Systemd suspend disabled."
+        echo "✅ Systemd sleep/hibernate disabled."
         ;;
     openrc)
         echo "→ Detected OpenRC (e.g. Alpine Linux)"
-        echo "Stopping and disabling acpid (if present)..."
         if rc-service --exists acpid; then
+            echo "Stopping and disabling acpid..."
             rc-service acpid stop || true
             rc-update del acpid || true
         fi
 
-        echo "Preventing CPU idle sleep..."
+        echo "Disabling CPU idle states..."
         for s in /sys/devices/system/cpu/cpuidle/state*/disable; do
             [ -w "$s" ] && echo 1 > "$s"
         done
 
-        # Persist across reboots
+        echo "Persisting settings via /etc/local.d..."
         mkdir -p /etc/local.d
         cat >/etc/local.d/nosleep.start <<'EOF'
 #!/bin/sh
@@ -53,7 +64,7 @@ EOF
         chmod +x /etc/local.d/nosleep.start
         rc-update add local default
 
-        echo "✅ OpenRC sleep disabled (ACPI + CPU idle)."
+        echo "✅ OpenRC sleep/ACPI disabled."
         ;;
     *)
         echo "⚠️ Unknown init system. Please disable suspend manually."
@@ -61,4 +72,4 @@ EOF
         ;;
 esac
 
-echo "Done."
+echo "🎉 Done — sleep and suspend disabled."
