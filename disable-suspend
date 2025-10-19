@@ -1,1 +1,64 @@
-systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+#!/bin/sh
+# disable-sleep.sh — disable system suspend/sleep across different init systems
+
+set -e
+
+echo "Detecting init system..."
+
+INIT_SYSTEM="unknown"
+
+if command -v systemctl >/dev/null 2>&1; then
+    if pidof systemd >/dev/null 2>&1; then
+        INIT_SYSTEM="systemd"
+    fi
+elif command -v rc-service >/dev/null 2>&1; then
+    INIT_SYSTEM="openrc"
+elif [ -f /sbin/init ]; then
+    # Fallback: check /proc/1/exe
+    INIT_EXE=$(readlink -f /proc/1/exe)
+    case "$INIT_EXE" in
+        *openrc*) INIT_SYSTEM="openrc" ;;
+        *systemd*) INIT_SYSTEM="systemd" ;;
+    esac
+fi
+
+case "$INIT_SYSTEM" in
+    systemd)
+        echo "→ Detected systemd"
+        echo "Disabling suspend/hibernate targets..."
+        systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+        echo "✅ Systemd suspend disabled."
+        ;;
+    openrc)
+        echo "→ Detected OpenRC (e.g. Alpine Linux)"
+        echo "Stopping and disabling acpid (if present)..."
+        if rc-service --exists acpid; then
+            rc-service acpid stop || true
+            rc-update del acpid || true
+        fi
+
+        echo "Preventing CPU idle sleep..."
+        for s in /sys/devices/system/cpu/cpuidle/state*/disable; do
+            [ -w "$s" ] && echo 1 > "$s"
+        done
+
+        # Persist across reboots
+        mkdir -p /etc/local.d
+        cat >/etc/local.d/nosleep.start <<'EOF'
+#!/bin/sh
+for s in /sys/devices/system/cpu/cpuidle/state*/disable; do
+    [ -w "$s" ] && echo 1 > "$s"
+done
+EOF
+        chmod +x /etc/local.d/nosleep.start
+        rc-update add local default
+
+        echo "✅ OpenRC sleep disabled (ACPI + CPU idle)."
+        ;;
+    *)
+        echo "⚠️ Unknown init system. Please disable suspend manually."
+        exit 1
+        ;;
+esac
+
+echo "Done."
