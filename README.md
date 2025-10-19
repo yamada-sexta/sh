@@ -1,4 +1,4 @@
-# Nannoda Script Collection
+# My Script Collection
 Shell script collection for personal use.
 
 Add public key
