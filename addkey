@@ -42,4 +42,4 @@ chmod 600 "$AUTHORIZED_KEYS"
 # Clean up temporary file
 rm /tmp/github_keys
 
-echo "Public keys successfully added to authorized_keys for user $GITHUB_USER."
+echo "Public keys successfully added to authorized_keys for user $GITHUB_USER. (๑•̀ㅂ•́)و✧"
