@@ -3,7 +3,7 @@
 # Prompt for GitHub username with a default
 DEFAULT_USER="yamada-sexta"
 echo -n "Enter GitHub username [${DEFAULT_USER}]: "
-read INPUT_USER
+read INPUT_USER < /dev/tty
 GITHUB_USER="${INPUT_USER:-$DEFAULT_USER}"
 
 # URL to fetch the keys
